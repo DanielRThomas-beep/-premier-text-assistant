@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17243a">
+<title>Premier Text Assistant</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4efe3;color:#17243a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}header{background:#17243a;color:#fff;padding:24px 20px 20px;display:flex;gap:14px;align-items:center}.brand-icon{font-size:28px}.sub{font-size:11px;letter-spacing:2px;opacity:.8;margin-top:3px}h1{font-size:25px;margin:0;font-weight:700}main{max-width:560px;margin:auto;padding:18px}.photo-card,.card{background:#fff;border:1px solid #d8d1c2;border-radius:18px;box-shadow:0 3px 10px #0000000d}.photo-card{display:block;text-align:center;padding:27px 18px;margin-bottom:14px;cursor:pointer}.camera{font-size:42px;margin-bottom:6px}.photo-title{font-weight:800;font-size:21px}.photo-sub{font-size:13px;color:#657080;margin-top:5px}.card{padding:17px;margin-bottom:14px}.label{font-size:11px;font-weight:800;letter-spacing:1.6px;color:#657080}.value{font-size:24px;font-weight:750;margin-top:6px}.time{font-size:18px;font-weight:700;margin-top:3px}.status{font-size:13px;margin-top:9px;color:#657080}.message{font-size:15px;line-height:1.55;margin-top:9px;white-space:pre-line}.send{width:100%;border:0;border-radius:16px;background:#3d7657;color:white;font-size:19px;font-weight:800;padding:18px;box-shadow:0 3px 8px #00000018}.send:disabled{background:#a7b3aa}.retry{width:100%;margin-top:10px;padding:13px;border:1px solid #bdb5a5;border-radius:13px;background:transparent;color:#17243a;font-weight:700}footer{text-align:center;padding:16px;color:#657080;font-size:12px;letter-spacing:1px}@media(min-width:700px){main{padding-top:30px}}
+
+</style>
+</head>
+<body>
+<header>
+  <div class="brand-icon">✈</div>
+  <div>
+    <h1>Text Assistant</h1>
+    <div class="sub">PHOTO → TEXT → SEND</div>
+  </div>
+</header>
+
+<main>
+  <label class="photo-card" for="photoInput">
+    <div class="camera">▣</div>
+    <div class="photo-title">TAKE PICTURE</div>
+    <div class="photo-sub">Photograph the NUMBER / TIME section of your schedule</div>
+  </label>
+  <input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
+
+  <section class="card">
+    <div class="label">READY TO SEND</div>
+    <div class="value" id="phone">—</div>
+    <div class="time" id="time">—</div>
+    <div class="status" id="status">Take a picture to begin.</div>
+  </section>
+
+  <section class="card">
+    <div class="label">MESSAGE PREVIEW</div>
+    <div id="message" class="message">Your message will appear here.</div>
+  </section>
+
+  <button id="sendBtn" class="send" disabled>SEND TEXT</button>
+  <button id="retryBtn" class="retry" hidden>TAKE ANOTHER PICTURE</button>
+</main>
+
+<footer>Premier Services Group</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+const input=document.getElementById('photoInput');
+const phoneEl=document.getElementById('phone');
+const timeEl=document.getElementById('time');
+const messageEl=document.getElementById('message');
+const statusEl=document.getElementById('status');
+const sendBtn=document.getElementById('sendBtn');
+const retryBtn=document.getElementById('retryBtn');
+
+let phone='', time='', message='';
+
+function buildMessage(t){
+  const hour=parseInt((t.match(/\d{1,2}/)||['0'])[0],10);
+  const period=hour<12?'morning':'afternoon';
+  return `Hello, this is Daniel with Premier Services Group, the flooring and backsplash installer for Lowe’s.
+
+I should be arriving at your home to measure between ${t} tomorrow ${period}.
+
+Please confirm that this will work for you, and let me know how many areas you are wanting measured.
+
+Thank you, and have a fantastic evening!`;
+}
+function findPhone(text){
+  const m=text.match(/(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}/);
+  return m ? m[0].replace(/[^\d]/g,'').replace(/^1(?=\d{10})/,'') : '';
+}
+function findTime(text){
+  const m=text.match(/\b\d{1,2}:\d{2}\s*(?:[-–—]|to)\s*\d{1,2}:\d{2}\b/i);
+  return m ? m[0].replace(/\s*(?:to)\s*/i,'–').replace(/\s*[-–—]\s*/,'–') : '';
+}
+async function processPhoto(file){
+  sendBtn.disabled=true; retryBtn.hidden=true;
+  statusEl.textContent='Reading the schedule…';
+  try{
+    const result=await Tesseract.recognize(file,'eng',{logger:m=>{
+      if(m.status==='recognizing text') statusEl.textContent=`Reading the schedule… ${Math.round((m.progress||0)*100)}%`;
+    }});
+    const text=result.data.text;
+    phone=findPhone(text); time=findTime(text);
+    phoneEl.textContent=phone?formatPhone(phone):'Phone number not found';
+    timeEl.textContent=time||'Appointment time not found';
+    if(phone && time){
+      message=buildMessage(time);
+      messageEl.textContent=message;
+      statusEl.textContent='Ready — tap SEND TEXT.';
+      sendBtn.disabled=false;
+    }else{
+      messageEl.textContent='Could not find both the phone number and appointment time. Try a clearer picture of the NUMBER / TIME box.';
+      statusEl.textContent='Try again.';
+      retryBtn.hidden=false;
+    }
+  }catch(e){
+    statusEl.textContent='Could not read the picture. Try again.';
+    retryBtn.hidden=false;
+  }
+}
+function formatPhone(p){return `(${p.slice(0,3)}) ${p.slice(3,6)}-${p.slice(6)}`}
+
+input.addEventListener('change',()=>{if(input.files[0]) processPhoto(input.files[0])});
+retryBtn.addEventListener('click',()=>input.click());
+
+sendBtn.addEventListener('click',()=>{
+  if(!phone||!message)return;
+  // iOS opens Messages with recipient and body. User taps Apple's Send button.
+  window.location.href=`sms:${phone}?&body=${encodeURIComponent(message)}`;
+});
+
+</script>
+</body>
+</html>
